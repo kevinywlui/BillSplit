@@ -211,6 +211,14 @@ class BillViewModel @JvmOverloads constructor(
         }
     }
 
+    fun updateLineItemName(itemId: String, name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return
+        _session.update { session ->
+            session.copy(items = session.items.map { if (it.id == itemId) it.copy(name = trimmed) else it })
+        }
+    }
+
     fun removeLineItem(itemId: String) {
         _session.update { it.copy(items = it.items.filter { item -> item.id != itemId }) }
     }

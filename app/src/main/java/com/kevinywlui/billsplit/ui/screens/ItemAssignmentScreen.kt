@@ -44,6 +44,7 @@ fun ItemAssignmentScreen(
     val isProcessing by viewModel.isProcessing.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     var editingPriceItem by remember { mutableStateOf<LineItem?>(null) }
+    var editingNameItem by remember { mutableStateOf<LineItem?>(null) }
     var showAddItemSheet by remember { mutableStateOf(false) }
 
     if (isProcessing) {
@@ -132,6 +133,7 @@ fun ItemAssignmentScreen(
                             viewModel.assignItem(item.id, updated)
                         },
                         onAssignAll = { viewModel.assignItem(item.id, session.people.map { it.id }) },
+                        onEditName = { editingNameItem = item },
                         onEditPrice = { editingPriceItem = item },
                         onDelete = { viewModel.removeLineItem(item.id) }
                     )
@@ -166,6 +168,23 @@ fun ItemAssignmentScreen(
         }
     }
 
+    editingNameItem?.let { item ->
+        ModalBottomSheet(
+            onDismissRequest = { editingNameItem = null },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            EditTextSheetContent(
+                label = "Item name",
+                current = item.name,
+                onDismiss = { editingNameItem = null },
+                onSave = { name ->
+                    viewModel.updateLineItemName(item.id, name)
+                    editingNameItem = null
+                }
+            )
+        }
+    }
+
     if (showAddItemSheet) {
         ModalBottomSheet(
             onDismissRequest = { showAddItemSheet = false },
@@ -189,6 +208,7 @@ private fun LineItemCard(
     people: List<Person>,
     onTogglePerson: (String) -> Unit,
     onAssignAll: () -> Unit,
+    onEditName: () -> Unit,
     onEditPrice: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -207,7 +227,11 @@ private fun LineItemCard(
     ) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(item.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Text(
+                    item.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f).clickable(onClick = onEditName)
+                )
                 Text(
                     Money.dollars(item.price),
                     style = MaterialTheme.typography.titleMedium,
@@ -264,6 +288,14 @@ private fun LineItemCard(
     }
 }
 
+/** Holds the in-progress amount edit for [TotalsSection]'s bottom sheet. */
+private class AmountEdit(
+    val label: String,
+    val current: Double,
+    val base: Double?,
+    val onSave: (Double) -> Unit
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TotalsSection(
@@ -274,18 +306,10 @@ private fun TotalsSection(
     onEditReceiptTotal: (Double) -> Unit,
     onEditAdjustments: (Double) -> Unit
 ) {
-    var editingAmountLabel by remember { mutableStateOf<String?>(null) }
-    var editingValue by remember { mutableStateOf(0.0) }
-    var editingOnSave by remember { mutableStateOf<(Double) -> Unit>({}) }
-    var editingBase by remember { mutableStateOf<Double?>(null) }
+    // Single state object for the amount-edit sheet instead of four parallel
+    // vars (one of which held a lambda in mutableStateOf — a fragile pattern).
+    var amountEdit by remember { mutableStateOf<AmountEdit?>(null) }
     var showRestaurantEdit by remember { mutableStateOf(false) }
-
-    fun startAmountEdit(label: String, current: Double, base: Double? = null, onSave: (Double) -> Unit) {
-        editingAmountLabel = label
-        editingValue = current
-        editingBase = base
-        editingOnSave = onSave
-    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -297,29 +321,29 @@ private fun TotalsSection(
             HorizontalDivider()
             TextRow("Restaurant name", restaurantName.ifBlank { "—" }) { showRestaurantEdit = true }
             FeeRow("Receipt total", receiptTotal) {
-                startAmountEdit("Receipt total", receiptTotal, onSave = onEditReceiptTotal)
+                amountEdit = AmountEdit("Receipt total", receiptTotal, base = null, onSave = onEditReceiptTotal)
             }
             FeeRow(
                 label = "Adjustments (usually tip)",
                 amount = adjustments,
                 pct = if (adjustments > 0 && receiptTotal > 0) (adjustments / receiptTotal) * 100 else null
             ) {
-                startAmountEdit("Adjustments (usually tip)", adjustments, base = receiptTotal, onSave = onEditAdjustments)
+                amountEdit = AmountEdit("Adjustments (usually tip)", adjustments, base = receiptTotal, onSave = onEditAdjustments)
             }
         }
     }
 
-    editingAmountLabel?.let { label ->
+    amountEdit?.let { edit ->
         ModalBottomSheet(
-            onDismissRequest = { editingAmountLabel = null },
+            onDismissRequest = { amountEdit = null },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ) {
             EditAmountSheetContent(
-                label = label,
-                current = editingValue,
-                onDismiss = { editingAmountLabel = null },
-                onSave = { editingOnSave(it); editingAmountLabel = null },
-                baseForPercentage = editingBase
+                label = edit.label,
+                current = edit.current,
+                onDismiss = { amountEdit = null },
+                onSave = { edit.onSave(it); amountEdit = null },
+                baseForPercentage = edit.base
             )
         }
     }

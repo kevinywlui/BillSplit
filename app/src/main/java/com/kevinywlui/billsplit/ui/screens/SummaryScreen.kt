@@ -61,6 +61,7 @@ fun SummaryScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var showRestaurantEdit by remember { mutableStateOf(false) }
     var showVenmoHelp by remember { mutableStateOf(false) }
+    var showNewBillConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(saveMessage) {
         saveMessage?.let {
@@ -125,7 +126,10 @@ fun SummaryScreen(
                         OutlinedButton(onClick = { viewModel.saveCurrentBill() }, modifier = Modifier.weight(1f)) {
                             Text("Save Bill")
                         }
-                        OutlinedButton(onClick = onNewBill, modifier = Modifier.weight(1f)) {
+                        OutlinedButton(
+                            onClick = { if (session.items.isEmpty()) onNewBill() else showNewBillConfirm = true },
+                            modifier = Modifier.weight(1f)
+                        ) {
                             Text("New Bill")
                         }
                     }
@@ -223,6 +227,20 @@ fun SummaryScreen(
 
     if (showVenmoHelp) {
         VenmoHelpDialog(onDismiss = { showVenmoHelp = false })
+    }
+
+    if (showNewBillConfirm) {
+        AlertDialog(
+            onDismissRequest = { showNewBillConfirm = false },
+            title = { Text("Start a new bill?") },
+            text = { Text("This clears the current split. Save it first if you want to keep it.") },
+            confirmButton = {
+                TextButton(onClick = { showNewBillConfirm = false; onNewBill() }) { Text("New bill") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNewBillConfirm = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 
@@ -486,6 +504,20 @@ private fun PersonSummaryCard(
     }
 }
 
+/**
+ * Decodes a saved receipt JPEG with [BitmapFactory.Options.inSampleSize] so a large
+ * image can't OOM — caps the longest edge near [reqSize] px (powers-of-two sampling).
+ */
+private fun decodeSampledFile(path: String, reqSize: Int): android.graphics.Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(path, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sample = 1
+    val longest = maxOf(bounds.outWidth, bounds.outHeight)
+    while (longest / sample > reqSize) sample *= 2
+    return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
+}
+
 @Composable
 private fun ReceiptImageCard(imagePath: String) {
     var expanded by remember { mutableStateOf(false) }
@@ -493,7 +525,7 @@ private fun ReceiptImageCard(imagePath: String) {
 
     LaunchedEffect(imagePath) {
         bitmap = withContext(Dispatchers.IO) {
-            BitmapFactory.decodeFile(imagePath)?.asImageBitmap()
+            decodeSampledFile(imagePath, reqSize = 1080)?.asImageBitmap()
         }
     }
 

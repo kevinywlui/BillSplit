@@ -201,8 +201,14 @@ private suspend fun decodeReceiptBitmap(context: Context, uri: Uri): Bitmap? =
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 val source = ImageDecoder.createSource(context.contentResolver, uri)
-                ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+                ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
                     decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                    // Cap the decoded size so a huge gallery photo can't OOM; it's
+                    // re-scaled to 1568 before upload/OCR anyway.
+                    val longest = maxOf(info.size.width, info.size.height)
+                    var sample = 1
+                    while (longest / sample > 2048) sample *= 2
+                    if (sample > 1) decoder.setTargetSampleSize(sample)
                 }
             } else {
                 @Suppress("DEPRECATION")

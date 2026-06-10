@@ -87,11 +87,31 @@ class BillHistorySerializationTest {
 
     @Test
     fun `corrupt single entry is skipped, others survive`() {
+        // serialize now emits a versioned envelope {"version":1,"bills":[...]};
+        // inject a corrupt entry into the bills array before the closing "]}".
         val good = serialize(listOf(bill(restaurantName = "Good")))
-        val withCorrupt = good.dropLast(1) + """, {"id": "x", "savedAt": "NOT_A_LONG"}]"""
+        val withCorrupt = good.dropLast(2) + """, {"id": "x", "savedAt": "NOT_A_LONG"}]}"""
         val result = deserialize(withCorrupt)
         assertEquals(1, result.size)
         assertEquals("Good", result[0].restaurantName)
+    }
+
+    @Test
+    fun `serialize emits a versioned envelope`() {
+        val out = serialize(listOf(bill(restaurantName = "X")))
+        assertTrue(out.contains("\"version\""))
+        assertTrue(out.contains("\"bills\""))
+    }
+
+    @Test
+    fun `legacy bare array still deserializes (migration)`() {
+        // Data written before schema versioning was a bare JSON array.
+        val legacy = """[{"id":"old","savedAt":1000,"people":[],"items":[],
+            "tax":1.0,"grandTotal":5.0,"restaurantName":"Legacy","finalShares":{}}]"""
+        val result = deserialize(legacy)
+        assertEquals(1, result.size)
+        assertEquals("Legacy", result[0].restaurantName)
+        assertEquals(1.0, result[0].tax, 0.001)
     }
 
     @Test
