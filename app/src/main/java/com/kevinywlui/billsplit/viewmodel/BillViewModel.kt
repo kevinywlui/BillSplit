@@ -12,6 +12,10 @@ import com.kevinywlui.billsplit.model.BillSession
 import com.kevinywlui.billsplit.model.LineItem
 import com.kevinywlui.billsplit.model.Person
 import com.kevinywlui.billsplit.ocr.ClaudeReceiptParser
+import com.kevinywlui.billsplit.ocr.ReceiptParseError
+import com.kevinywlui.billsplit.ocr.ReceiptParseException
+import com.kevinywlui.billsplit.ocr.classifyParseError
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -224,7 +228,8 @@ class BillViewModel @JvmOverloads constructor(
     fun processReceiptImage(bitmap: Bitmap) {
         deleteOrphanedImage(_session.value.receiptImagePath)
         receiptJob?.cancel()
-        receiptJob = viewModelScope.launch {
+        var job: Job? = null
+        job = viewModelScope.launch {
             _isProcessing.value = true
             _errorMessage.value = null
             try {
@@ -244,18 +249,38 @@ class BillViewModel @JvmOverloads constructor(
                     userTotal = null,
                     adjustments = 0.0,
                     restaurantName = parsed.restaurantName,
-                    receiptImagePath = imagePath
+                    receiptImagePath = imagePath,
+                    receiptTotalFromOcr = true
                 ) }
                 if (parsed.items.isEmpty()) {
                     _errorMessage.value = "No items detected. Add them manually."
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 android.util.Log.e("BillSplit", "Receipt parsing failed", e)
-                _errorMessage.value = "Could not read receipt. Add items manually."
+                _errorMessage.value = parseErrorMessage(e)
             } finally {
-                _isProcessing.value = false
+                // Only clear the spinner if a newer scan hasn't already taken over.
+                if (receiptJob === job) _isProcessing.value = false
             }
         }
+        receiptJob = job
+    }
+
+    private fun parseErrorMessage(e: Throwable): String = when {
+        e is ReceiptParseException -> when (classifyParseError(e.statusCode)) {
+            ReceiptParseError.AUTH ->
+                "Your Anthropic API key was rejected. Check it in Settings."
+            ReceiptParseError.RATE_LIMIT ->
+                "Anthropic is rate-limiting requests. Wait a moment and try again."
+            ReceiptParseError.SERVER ->
+                "Anthropic had a server error. Try again in a moment."
+            else -> "Could not read receipt. Add items manually."
+        }
+        e is java.io.IOException ->
+            "No internet connection. Check your network and try again."
+        else -> "Could not read receipt. Add items manually."
     }
 
     fun resetSession() {

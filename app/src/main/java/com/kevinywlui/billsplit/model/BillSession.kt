@@ -11,7 +11,10 @@ data class BillSession(
     val adjustments: Double = 0.0,
     val restaurantName: String = "",
     val venmoRequestedPersonIds: Set<String> = emptySet(),
-    val receiptImagePath: String? = null
+    val receiptImagePath: String? = null,
+    // True only for a freshly OCR'd bill, so the discrepancy warning fires for
+    // scanned receipts but not for manually-entered or reloaded history bills.
+    val receiptTotalFromOcr: Boolean = false
 ) {
     val subtotal: Double get() = items.sumOf { it.price }
     val totalFees: Double get() = tax + tip + otherFees
@@ -39,7 +42,10 @@ data class BillSession(
         }
 
         // Largest remainder: floor everyone, distribute leftover cents by biggest fractional part.
-        val targetCents = Math.round(effectiveTotal * 100)
+        // Target the rounded sum of the exact shares (NOT effectiveTotal): when items are left
+        // unassigned, exact shares legitimately sum to less than effectiveTotal, and targeting
+        // effectiveTotal would sprinkle stray cents onto arbitrary people.
+        val targetCents = Math.round(exact.values.sum() * 100)
         val flooredCents = exact.mapValues { (_, v) -> (v * 100).toLong() }
         val remainders = exact.mapValues { (_, v) -> (v * 100) - (v * 100).toLong() }
         val leftover = (targetCents - flooredCents.values.sum()).coerceAtLeast(0)
@@ -51,6 +57,13 @@ data class BillSession(
 
         finalCents.mapValues { (_, c) -> c / 100.0 }
     }
+
+    // Difference between the OCR-read receipt total and the computed line-item total.
+    // Only meaningful for a freshly scanned bill (receiptTotalFromOcr).
+    fun hasReceiptDiscrepancy(epsilon: Double = 0.02): Boolean =
+        receiptTotalFromOcr && receiptTotal > 0.0 && kotlin.math.abs(grandTotal - receiptTotal) > epsilon
+
+    val receiptDiscrepancy: Double get() = grandTotal - receiptTotal
 
     fun totalFor(personId: String): Double = finalShares[personId] ?: 0.0
     fun foodShareFor(personId: String): Double = items.sumOf { it.shareFor(personId) }

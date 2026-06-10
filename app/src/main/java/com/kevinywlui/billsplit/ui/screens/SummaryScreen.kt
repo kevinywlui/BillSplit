@@ -17,8 +17,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,13 +30,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.kevinywlui.billsplit.model.BillSession
 import com.kevinywlui.billsplit.model.Person
+import com.kevinywlui.billsplit.util.Money
+import com.kevinywlui.billsplit.util.buildPersonShareLine
+import com.kevinywlui.billsplit.util.buildShareText
 import com.kevinywlui.billsplit.viewmodel.BillViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.URLEncoder
 
@@ -47,6 +56,8 @@ fun SummaryScreen(
     val session by viewModel.session.collectAsState()
     val saveMessage by viewModel.saveMessage.collectAsState()
     val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     var showRestaurantEdit by remember { mutableStateOf(false) }
     var showVenmoHelp by remember { mutableStateOf(false) }
@@ -84,15 +95,39 @@ fun SummaryScreen(
         },
         bottomBar = {
             Surface(shadowElevation = 8.dp, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-                Row(
+                Column(
                     Modifier.fillMaxWidth().padding(16.dp).navigationBarsPadding(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedButton(onClick = { viewModel.saveCurrentBill() }, modifier = Modifier.weight(1f)) {
-                        Text("Save Bill")
+                    Button(
+                        onClick = {
+                            val text = buildShareText(session)
+                            runCatching {
+                                context.startActivity(
+                                    Intent.createChooser(
+                                        Intent(Intent.ACTION_SEND).apply {
+                                            type = "text/plain"
+                                            putExtra(Intent.EXTRA_TEXT, text)
+                                        },
+                                        "Share split"
+                                    )
+                                )
+                            }
+                        },
+                        enabled = session.people.isNotEmpty(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Share Split")
                     }
-                    Button(onClick = onNewBill, modifier = Modifier.weight(1f)) {
-                        Text("New Bill")
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(onClick = { viewModel.saveCurrentBill() }, modifier = Modifier.weight(1f)) {
+                            Text("Save Bill")
+                        }
+                        OutlinedButton(onClick = onNewBill, modifier = Modifier.weight(1f)) {
+                            Text("New Bill")
+                        }
                     }
                 }
             }
@@ -110,6 +145,10 @@ fun SummaryScreen(
                 BillTotalsCard(session, onEditRestaurantName = { showRestaurantEdit = true })
             }
 
+            if (session.hasReceiptDiscrepancy()) {
+                item { DiscrepancyWarningCard(session) }
+            }
+
             items(session.people, key = { it.id }) { person ->
                 PersonSummaryCard(
                     person = person,
@@ -122,7 +161,7 @@ fun SummaryScreen(
                         val uri = Uri.parse(
                             "https://venmo.com/?txn=charge&audience=private" +
                                 "&recipients=${person.venmoUsername}" +
-                                "&amount=${"%.2f".format(amount)}" +
+                                "&amount=${Money.format(amount)}" +
                                 "&note=${URLEncoder.encode(note, "UTF-8")}"
                         )
                         val launched = runCatching {
@@ -130,7 +169,11 @@ fun SummaryScreen(
                         }.isSuccess
                         if (launched) viewModel.toggleVenmoRequested(person.id)
                     },
-                    onToggleVenmoRequested = { viewModel.toggleVenmoRequested(person.id) }
+                    onToggleVenmoRequested = { viewModel.toggleVenmoRequested(person.id) },
+                    onCopyShare = {
+                        clipboard.setText(AnnotatedString(buildPersonShareLine(session, person)))
+                        scope.launch { snackbarHostState.showSnackbar("Copied ${person.name}'s share") }
+                    }
                 )
             }
 
@@ -152,7 +195,7 @@ fun SummaryScreen(
                             )
                             unassigned.forEach { item ->
                                 Text(
-                                    "${item.name} — $${"%.2f".format(item.price)}",
+                                    "${item.name} — ${Money.dollars(item.price)}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onErrorContainer
                                 )
@@ -287,11 +330,48 @@ private fun BillTotalsCard(session: BillSession, onEditRestaurantName: () -> Uni
 }
 
 @Composable
+private fun DiscrepancyWarningCard(session: BillSession) {
+    val diff = session.receiptDiscrepancy
+    val direction = if (diff > 0) "more than" else "less than"
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+    ) {
+        Row(
+            Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.Warning,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    "Totals don't match",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                Text(
+                    "The items add up to ${Money.dollars(session.grandTotal)}, $direction the " +
+                        "${Money.dollars(session.receiptTotal)} on the receipt " +
+                        "(off by ${Money.dollars(kotlin.math.abs(diff))}). Check for a missed or misread item.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun TotalRow(label: String, amount: Double, bold: Boolean = false) {
     val style = if (bold) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, style = style)
-        Text("$${"%.2f".format(amount)}", style = style)
+        Text(Money.dollars(amount), style = style)
     }
 }
 
@@ -300,22 +380,37 @@ private fun PersonSummaryCard(
     person: Person,
     session: BillSession,
     onRequestVenmo: (amount: Double, note: String) -> Unit,
-    onToggleVenmoRequested: () -> Unit
+    onToggleVenmoRequested: () -> Unit,
+    onCopyShare: () -> Unit
 ) {
     val total = session.totalFor(person.id)
     val foodShare = session.foodShareFor(person.id)
     val feeShare = session.feeShareFor(person.id)
+    // A bill with no fees/tip/override shouldn't show a sub-cent rounding remnant as a fee.
+    val showFees = (session.effectiveTotal - session.subtotal) > 0.005 && feeShare > 0.005
     val fraction = session.fractionFor(person.id)
     val assignedItems = session.items.filter { person.id in it.assignedPersonIds }
     val isRequested = person.id in session.venmoRequestedPersonIds
 
     Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(person.name, style = MaterialTheme.typography.titleMedium)
-                Text("%.0f%% of bill".format(fraction * 100),
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(person.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text("${Money.percent(fraction * 100)} of bill",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+                IconButton(onClick = onCopyShare) {
+                    Icon(
+                        Icons.Default.ContentCopy,
+                        contentDescription = "Copy ${person.name}'s share",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             Spacer(Modifier.height(2.dp))
@@ -324,24 +419,24 @@ private fun PersonSummaryCard(
                 val label = if (item.assignedPersonIds.size > 1) "${item.name} (÷${item.assignedPersonIds.size})" else item.name
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("$${"%.2f".format(item.shareFor(person.id))}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(Money.dollars(item.shareFor(person.id)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
             TotalRow("Food subtotal", foodShare)
-            if (feeShare > 0) TotalRow("Fees, taxes & tip", feeShare)
+            if (showFees) TotalRow("Fees, taxes & tip", feeShare)
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
             TotalRow("Total", total, bold = true)
 
             if (person.venmoUsername.isNotBlank() && total > 0) {
                 val note = run {
                     val prefix = if (session.restaurantName.isNotBlank()) "${session.restaurantName}: " else ""
-                    val feesPart = if (feeShare > 0) {
+                    val feesPart = if (showFees) {
                         val pct = if (foodShare > 0) (feeShare / foodShare) * 100 else 0.0
-                        "Fees/Tip (${"$"}${"%.2f".format(feeShare)}=${"%.0f".format(pct)}%)"
+                        "Fees/Tip (${Money.dollars(feeShare)}=${Money.percent(pct)})"
                     } else null
-                    val totalPart = "= ${"$"}${"%.2f".format(total)}"
+                    val totalPart = "= ${Money.dollars(total)}"
 
                     fun assemble(itemParts: List<String>): String {
                         val parts = buildList { addAll(itemParts); if (feesPart != null) add(feesPart) }
@@ -351,14 +446,14 @@ private fun PersonSummaryCard(
                     val itemParts = assignedItems.map { item ->
                         val label = if (item.assignedPersonIds.size > 1)
                             "${item.name} ÷${item.assignedPersonIds.size}" else item.name
-                        "$label (${"$"}${"%.2f".format(item.shareFor(person.id))})"
+                        "$label (${Money.dollars(item.shareFor(person.id))})"
                     }
 
                     val full = assemble(itemParts)
                     if (full.length <= 280) return@run full
 
                     // Collapse individual items into a count summary
-                    val collapsed = assemble(listOf("${assignedItems.size} items (${"$"}${"%.2f".format(foodShare)})"))
+                    val collapsed = assemble(listOf("${assignedItems.size} items (${Money.dollars(foodShare)})"))
                     if (collapsed.length <= 280) return@run collapsed
 
                     // Last resort: hard truncate with ellipsis
@@ -366,7 +461,7 @@ private fun PersonSummaryCard(
                 }
                 Spacer(Modifier.height(8.dp))
                 Button(onClick = { onRequestVenmo(total, note) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Request $${"%.2f".format(total)} via Venmo")
+                    Text("Request ${Money.dollars(total)} via Venmo")
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth().clickable(onClick = onToggleVenmoRequested),

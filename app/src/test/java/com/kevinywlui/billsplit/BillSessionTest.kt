@@ -159,4 +159,56 @@ class BillSessionTest {
         assertEquals(24.0, shares[p1.id]!!, 0.01)
         assertEquals(12.0, shares[p2.id]!!, 0.01)
     }
+
+    // ── unassigned-items rounding (regression: no stray cents) ────────────────
+
+    @Test
+    fun `unassigned items do not add stray cents`() {
+        val p1 = person("a"); val p2 = person("b")
+        val session = BillSession(
+            people = listOf(p1, p2),
+            items = listOf(
+                item(10.0, p1.id),
+                item(10.0, p2.id),
+                item(10.0)          // unassigned — nobody pays for it
+            )
+        )
+        // Each assigned person pays exactly their $10; the unassigned $10 is excluded,
+        // and rounding must NOT inflate anyone (old bug produced $10.01 each = $20.02).
+        assertEquals(10.0, session.finalShares[p1.id]!!, 0.001)
+        assertEquals(10.0, session.finalShares[p2.id]!!, 0.001)
+        assertEquals(20.0, session.finalShares.values.sum(), 0.001)
+    }
+
+    // ── discrepancy predicate ─────────────────────────────────────────────────
+
+    @Test
+    fun `hasReceiptDiscrepancy true when ocr total differs beyond epsilon`() {
+        val session = BillSession(
+            items = listOf(item(10.0), item(5.0)),  // grandTotal 15
+            receiptTotal = 20.0,
+            receiptTotalFromOcr = true
+        )
+        assertTrue(session.hasReceiptDiscrepancy())
+    }
+
+    @Test
+    fun `hasReceiptDiscrepancy false within epsilon`() {
+        val session = BillSession(
+            items = listOf(item(10.0), item(5.0)),  // grandTotal 15
+            receiptTotal = 15.0,
+            receiptTotalFromOcr = true
+        )
+        assertTrue(!session.hasReceiptDiscrepancy())
+    }
+
+    @Test
+    fun `hasReceiptDiscrepancy false when not from ocr`() {
+        val session = BillSession(
+            items = listOf(item(10.0), item(5.0)),  // grandTotal 15
+            receiptTotal = 20.0,
+            receiptTotalFromOcr = false              // e.g. reloaded history bill
+        )
+        assertTrue(!session.hasReceiptDiscrepancy())
+    }
 }

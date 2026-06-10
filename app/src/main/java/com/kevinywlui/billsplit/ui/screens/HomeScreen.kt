@@ -129,8 +129,9 @@ fun HomeScreen(
             title = { Text("API key needed") },
             text = {
                 Text(
-                    "Receipt scanning needs an Anthropic API key. Add one in Settings, " +
-                        "or scan anyway and enter the items manually."
+                    "Receipt scanning sends the photo to Claude and uses your own Anthropic " +
+                        "API key (and credits). Get a key at console.anthropic.com, then add it " +
+                        "in Settings. You can also scan anyway and enter items manually."
                 )
             },
             confirmButton = {

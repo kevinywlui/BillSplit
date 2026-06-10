@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.util.Base64
 import com.kevinywlui.billsplit.model.LineItem
 import com.kevinywlui.billsplit.model.ParsedReceipt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -102,13 +103,15 @@ object ClaudeReceiptParser {
             try {
                 call.execute().use { response ->
                     if (!response.isSuccessful) {
-                        cont.resumeWithException(Exception("API error ${response.code}"))
+                        cont.resumeWithException(ReceiptParseException(response.code, "API error ${response.code}"))
                         return@suspendCancellableCoroutine
                     }
                     val body = response.body?.string()
                     if (body != null) cont.resume(body)
-                    else cont.resumeWithException(Exception("Empty response"))
+                    else cont.resumeWithException(ReceiptParseException(null, "Empty response"))
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 cont.resumeWithException(e)
             }
@@ -121,6 +124,21 @@ object ClaudeReceiptParser {
 
         parseReceiptJson(text)
     }
+}
+
+/** Thrown by [ClaudeReceiptParser.parse]; [statusCode] is the HTTP status, or null for non-HTTP failures. */
+class ReceiptParseException(val statusCode: Int?, message: String) : Exception(message)
+
+/** Coarse error categories for user-facing messaging. */
+enum class ReceiptParseError { AUTH, RATE_LIMIT, SERVER, NETWORK, UNKNOWN }
+
+/** Pure mapping from an HTTP status code (or null) to an error category. Unit-tested. */
+fun classifyParseError(code: Int?): ReceiptParseError = when (code) {
+    401, 403 -> ReceiptParseError.AUTH
+    429 -> ReceiptParseError.RATE_LIMIT
+    in 500..599 -> ReceiptParseError.SERVER
+    null -> ReceiptParseError.NETWORK
+    else -> ReceiptParseError.UNKNOWN
 }
 
 internal fun parseReceiptJson(text: String): ParsedReceipt {

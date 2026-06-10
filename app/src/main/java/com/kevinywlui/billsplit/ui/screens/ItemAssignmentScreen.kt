@@ -9,21 +9,28 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.kevinywlui.billsplit.model.LineItem
 import com.kevinywlui.billsplit.model.Person
 import com.kevinywlui.billsplit.ui.components.PersonAvatar
 import com.kevinywlui.billsplit.ui.components.avatarColors
+import com.kevinywlui.billsplit.util.Money
 import com.kevinywlui.billsplit.viewmodel.BillViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -124,6 +131,7 @@ fun ItemAssignmentScreen(
                             val updated = if (personId in current) current - personId else current + personId
                             viewModel.assignItem(item.id, updated)
                         },
+                        onAssignAll = { viewModel.assignItem(item.id, session.people.map { it.id }) },
                         onEditPrice = { editingPriceItem = item },
                         onDelete = { viewModel.removeLineItem(item.id) }
                     )
@@ -174,11 +182,13 @@ fun ItemAssignmentScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun LineItemCard(
     item: LineItem,
     people: List<Person>,
     onTogglePerson: (String) -> Unit,
+    onAssignAll: () -> Unit,
     onEditPrice: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -199,7 +209,7 @@ private fun LineItemCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(item.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                 Text(
-                    "$${"%.2f".format(item.price)}",
+                    Money.dollars(item.price),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.clickable(onClick = onEditPrice)
                 )
@@ -209,14 +219,25 @@ private fun LineItemCard(
             }
             if (people.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     people.forEach { person ->
                         val isAssigned = person.id in item.assignedPersonIds
                         Box(
                             modifier = Modifier
                                 .size(38.dp)
                                 .alpha(if (isAssigned) 1f else 0.35f)
-                                .clickable { onTogglePerson(person.id) }
+                                .toggleable(
+                                    value = isAssigned,
+                                    role = Role.Checkbox,
+                                    onValueChange = { onTogglePerson(person.id) }
+                                )
+                                .semantics {
+                                    contentDescription = person.name
+                                    stateDescription = if (isAssigned) "assigned" else "not assigned"
+                                }
                         ) {
                             PersonAvatar(person = person, size = 38.dp)
                             if (isAssigned) {
@@ -227,6 +248,15 @@ private fun LineItemCard(
                                 )
                             }
                         }
+                    }
+                    if (people.size > 1) {
+                        AssistChip(
+                            onClick = onAssignAll,
+                            label = { Text("Everyone") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Group, contentDescription = null, modifier = Modifier.size(18.dp))
+                            }
+                        )
                     }
                 }
             }
@@ -329,8 +359,8 @@ private fun FeeRow(label: String, amount: Double, pct: Double? = null, onClick: 
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium)
-        val amountText = "$${"%.2f".format(amount)}"
-        val displayText = if (pct != null) "$amountText (${"%.0f".format(pct)}%)" else amountText
+        val amountText = Money.dollars(amount)
+        val displayText = if (pct != null) "$amountText (${Money.percent(pct)})" else amountText
         Text(displayText, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
     }
 }
@@ -345,7 +375,7 @@ private fun EditAmountSheetContent(
 ) {
     // 0 = flat $, 1 = % tip, 2 = set final total (modes 1 & 2 only available when baseForPercentage != null)
     var mode by remember { mutableStateOf(0) }
-    var text by remember { mutableStateOf("%.2f".format(current)) }
+    var text by remember { mutableStateOf(Money.format(current)) }
 
     val dollarValue: Double? = when {
         mode == 1 && baseForPercentage != null ->
@@ -385,7 +415,7 @@ private fun EditAmountSheetContent(
                     onClick = {
                         if (mode != 2) {
                             mode = 2
-                            text = "%.2f".format(baseForPercentage + current)
+                            text = Money.format(baseForPercentage + current)
                         }
                     },
                     shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3)
@@ -403,10 +433,10 @@ private fun EditAmountSheetContent(
         )
         if (baseForPercentage != null && baseForPercentage > 0) {
             val helperText: String? = when (mode) {
-                1 -> dollarValue?.let { "= ${"$"}${"%.2f".format(it)}" }
+                1 -> dollarValue?.let { "= ${Money.dollars(it)}" }
                 2 -> dollarValue?.let { adj ->
                     val pct = (adj / baseForPercentage) * 100
-                    "adjustment = ${"$"}${"%.2f".format(adj)} (${"%.1f".format(pct)}%)"
+                    "adjustment = ${Money.dollars(adj)} (${Money.percent1(pct)})"
                 }
                 else -> null
             }
@@ -499,7 +529,7 @@ private fun AddItemSheetContent(onDismiss: () -> Unit, onAdd: (String, Double) -
 
 @Composable
 private fun EditPriceSheetContent(item: LineItem, onDismiss: () -> Unit, onSave: (Double) -> Unit) {
-    var priceText by remember { mutableStateOf("%.2f".format(item.price)) }
+    var priceText by remember { mutableStateOf(Money.format(item.price)) }
     val price = priceText.toDoubleOrNull()
 
     Column(

@@ -21,6 +21,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import com.kevinywlui.billsplit.model.SavedBill
 import com.kevinywlui.billsplit.ui.components.PersonAvatar
+import com.kevinywlui.billsplit.util.Money
 import com.kevinywlui.billsplit.viewmodel.BillViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -127,7 +128,7 @@ private fun SavedBillCard(bill: SavedBill, onDelete: () -> Unit, onOpen: () -> U
                             Text(bill.restaurantName, style = MaterialTheme.typography.titleMedium)
                         }
                         Text(
-                            "$${"%.2f".format(bill.grandTotal)}",
+                            Money.dollars(bill.grandTotal),
                             style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -157,7 +158,7 @@ private fun SavedBillCard(bill: SavedBill, onDelete: () -> Unit, onOpen: () -> U
                         if (isRequested) {
                             Text("Requested", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                         }
-                        Text("$${"%.2f".format(amount)}", style = MaterialTheme.typography.bodyMedium)
+                        Text(Money.dollars(amount), style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }

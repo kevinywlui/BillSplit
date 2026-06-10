@@ -1,5 +1,7 @@
 package com.kevinywlui.billsplit
 
+import com.kevinywlui.billsplit.ocr.ReceiptParseError
+import com.kevinywlui.billsplit.ocr.classifyParseError
 import com.kevinywlui.billsplit.ocr.parseReceiptJson
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -8,6 +10,17 @@ import org.junit.Test
 class ClaudeReceiptParserTest {
 
     private fun claudeResponse(json: String) = json  // parseReceiptJson receives the text block directly
+
+    @Test
+    fun `classifyParseError maps status codes to categories`() {
+        assertEquals(ReceiptParseError.AUTH, classifyParseError(401))
+        assertEquals(ReceiptParseError.AUTH, classifyParseError(403))
+        assertEquals(ReceiptParseError.RATE_LIMIT, classifyParseError(429))
+        assertEquals(ReceiptParseError.SERVER, classifyParseError(500))
+        assertEquals(ReceiptParseError.SERVER, classifyParseError(529))
+        assertEquals(ReceiptParseError.NETWORK, classifyParseError(null))
+        assertEquals(ReceiptParseError.UNKNOWN, classifyParseError(400))
+    }
 
     @Test
     fun `parses all fields from clean JSON`() {
