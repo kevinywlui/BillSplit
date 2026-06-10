@@ -20,10 +20,31 @@ android {
         applicationId = "com.kevinywlui.billsplit"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        // Overridable from the release workflow: -PversionName / -PversionCode
+        versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 1
+        versionName = (project.findProperty("versionName") as String?) ?: "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "ANTHROPIC_API_KEY", "\"${localProperties["ANTHROPIC_API_KEY"]}\"")
+
+        // Resolve the API key from: (1) ANTHROPIC_API_KEY env var (CI secret),
+        // (2) local.properties (local dev), else empty.
+        val anthropicKey = System.getenv("ANTHROPIC_API_KEY")
+            ?: localProperties["ANTHROPIC_API_KEY"] as String?
+            ?: ""
+        buildConfigField("String", "ANTHROPIC_API_KEY", "\"$anthropicKey\"")
+    }
+
+    signingConfigs {
+        // Populated by the release CI workflow from repository secrets. When the
+        // keystore env var is absent (local builds), release stays unsigned.
+        val keystorePath = System.getenv("SIGNING_KEYSTORE_FILE")
+        if (keystorePath != null) {
+            create("release") {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -33,6 +54,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (System.getenv("SIGNING_KEYSTORE_FILE") != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
