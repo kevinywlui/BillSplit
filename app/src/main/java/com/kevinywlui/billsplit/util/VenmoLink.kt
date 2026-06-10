@@ -19,17 +19,20 @@ internal const val VENMO_NOTE_MAX_LENGTH = 280
  */
 fun normalizeVenmoUsername(raw: String): String {
     var u = raw.trim()
-        .removePrefix("https://")
-        .removePrefix("http://")
-        .removePrefix("www.")
+        .removePrefixIgnoreCase("https://")
+        .removePrefixIgnoreCase("http://")
+        .removePrefixIgnoreCase("www.")
     for (host in listOf("account.venmo.com/", "venmo.com/")) {
         if (u.startsWith(host, ignoreCase = true)) {
-            u = u.substring(host.length).removePrefix("u/")
+            u = u.substring(host.length).removePrefixIgnoreCase("u/")
             break
         }
     }
     return u.substringBefore('?').trimEnd('/').removePrefix("@").trim()
 }
+
+private fun String.removePrefixIgnoreCase(prefix: String): String =
+    if (startsWith(prefix, ignoreCase = true)) substring(prefix.length) else this
 
 /**
  * The charge deep link. The `?recipients=` query form is what Venmo's desktop

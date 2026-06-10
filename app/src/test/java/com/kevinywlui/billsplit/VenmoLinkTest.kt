@@ -38,6 +38,7 @@ class VenmoLinkTest {
         assertEquals("Kevin-Lui", normalizeVenmoUsername("venmo.com/Kevin-Lui"))
         assertEquals("Kevin-Lui", normalizeVenmoUsername("www.venmo.com/Kevin-Lui/"))
         assertEquals("Kevin-Lui", normalizeVenmoUsername("https://venmo.com/u/Kevin-Lui?utm_source=share"))
+        assertEquals("Kevin-Lui", normalizeVenmoUsername("HTTPS://VENMO.COM/u/Kevin-Lui"))
     }
 
     // --- buildVenmoChargeUrl ---
