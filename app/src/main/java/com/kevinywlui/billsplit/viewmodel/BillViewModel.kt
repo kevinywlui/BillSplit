@@ -15,6 +15,7 @@ import com.kevinywlui.billsplit.ocr.ClaudeReceiptParser
 import com.kevinywlui.billsplit.ocr.ReceiptParseError
 import com.kevinywlui.billsplit.ocr.ReceiptParseException
 import com.kevinywlui.billsplit.ocr.classifyParseError
+import com.kevinywlui.billsplit.util.normalizeVenmoUsername
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -126,7 +127,7 @@ class BillViewModel @JvmOverloads constructor(
     fun addNewPerson(name: String, venmoUsername: String = "") {
         if (name.isBlank()) return
         viewModelScope.launch {
-            val person = repo.addPerson(name.trim(), venmoUsername.trim())
+            val person = repo.addPerson(name.trim(), normalizeVenmoUsername(venmoUsername))
             _session.update { it.copy(people = it.people + person) }
         }
     }
@@ -141,10 +142,11 @@ class BillViewModel @JvmOverloads constructor(
     }
 
     fun updatePerson(updated: Person) {
+        val person = updated.copy(venmoUsername = normalizeVenmoUsername(updated.venmoUsername))
         viewModelScope.launch {
-            repo.updatePerson(updated)
+            repo.updatePerson(person)
             _session.update { session ->
-                session.copy(people = session.people.map { if (it.id == updated.id) updated else it })
+                session.copy(people = session.people.map { if (it.id == person.id) person else it })
             }
         }
     }

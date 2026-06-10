@@ -40,11 +40,12 @@ import com.kevinywlui.billsplit.model.Person
 import com.kevinywlui.billsplit.util.Money
 import com.kevinywlui.billsplit.util.buildPersonShareLine
 import com.kevinywlui.billsplit.util.buildShareText
+import com.kevinywlui.billsplit.util.buildVenmoChargeUrl
+import com.kevinywlui.billsplit.util.buildVenmoNote
 import com.kevinywlui.billsplit.viewmodel.BillViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.URLEncoder
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -158,16 +159,10 @@ fun SummaryScreen(
                     person = person,
                     session = session,
                     onRequestVenmo = { amount, note ->
-                        // The ?recipients= query form is what Venmo's desktop web honors
-                        // (confirmed working on desktop). With Venmo link handling disabled
-                        // this opens in the browser — which must have "Desktop site" on for
-                        // the amount/note to prefill.
-                        val uri = Uri.parse(
-                            "https://venmo.com/?txn=charge&audience=private" +
-                                "&recipients=${person.venmoUsername}" +
-                                "&amount=${Money.format(amount)}" +
-                                "&note=${URLEncoder.encode(note, "UTF-8")}"
-                        )
+                        // Desktop-web charge link (see buildVenmoChargeUrl). With Venmo link
+                        // handling disabled this opens in the browser — which must have
+                        // "Desktop site" on for the amount/note to prefill.
+                        val uri = Uri.parse(buildVenmoChargeUrl(person.venmoUsername, amount, note))
                         val launched = runCatching {
                             context.startActivity(Intent(Intent.ACTION_VIEW, uri))
                         }.isSuccess
@@ -448,37 +443,8 @@ private fun PersonSummaryCard(
             TotalRow("Total", total, bold = true)
 
             if (person.venmoUsername.isNotBlank() && total > 0) {
-                val note = run {
-                    val prefix = if (session.restaurantName.isNotBlank()) "${session.restaurantName}: " else ""
-                    val feesPart = if (showFees) {
-                        val pct = if (foodShare > 0) (feeShare / foodShare) * 100 else 0.0
-                        "Fees/Tip (${Money.dollars(feeShare)}=${Money.percent(pct)})"
-                    } else null
-                    val totalPart = "= ${Money.dollars(total)}"
-
-                    fun assemble(itemParts: List<String>): String {
-                        val parts = buildList { addAll(itemParts); if (feesPart != null) add(feesPart) }
-                        return "$prefix${parts.joinToString(" + ")} $totalPart"
-                    }
-
-                    val itemParts = assignedItems.map { item ->
-                        val label = if (item.assignedPersonIds.size > 1)
-                            "${item.name} ÷${item.assignedPersonIds.size}" else item.name
-                        "$label (${Money.dollars(item.shareFor(person.id))})"
-                    }
-
-                    val full = assemble(itemParts)
-                    if (full.length <= 280) return@run full
-
-                    // Collapse individual items into a count summary
-                    val collapsed = assemble(listOf("${assignedItems.size} items (${Money.dollars(foodShare)})"))
-                    if (collapsed.length <= 280) return@run collapsed
-
-                    // Last resort: hard truncate with ellipsis
-                    collapsed.take(277) + "..."
-                }
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = { onRequestVenmo(total, note) }, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = { onRequestVenmo(total, buildVenmoNote(session, person)) }, modifier = Modifier.fillMaxWidth()) {
                     Text("Request ${Money.dollars(total)} via Venmo")
                 }
                 Row(

@@ -36,6 +36,10 @@ com.kevinywlui.billsplit
 ├── data/
 │   ├── PeopleRepository.kt       — DataStore: saved person roster
 │   └── BillHistoryRepository.kt  — DataStore: past bills
+├── util/
+│   ├── Money.kt                  — locale-pinned money/percent formatting
+│   ├── ShareText.kt              — plain-text bill breakdown for group chats
+│   └── VenmoLink.kt              — username normalization, charge URL, note builder
 └── ui/
     ├── screens/
     │   ├── HomeScreen.kt
@@ -164,23 +168,26 @@ OkHttp timeouts: connect 30s, write 60s, read 60s. The call is wrapped in `suspe
 
 ## Venmo Deep Link
 
+All link logic lives in `util/VenmoLink.kt` (pure JVM, unit-tested in `VenmoLinkTest`). Venmo usernames are normalized once at save time (`normalizeVenmoUsername`): whitespace, a leading `@`, and pasted profile URLs (`venmo.com/u/<name>` etc.) all reduce to the bare username. Normalization is lenient by design — no charset/length validation — so a valid username can never be rejected.
+
 When a person has a `venmoUsername` and their total > $0, Summary shows a charge button. Tapping it:
 
-1. Builds a note string:
+1. Builds a note string (`buildVenmoNote`):
    ```
    Pacific Catch: Salmon ($20.95) + Fries ÷2 ($4.00) + Fees/Tip ($7.42=18%) = $32.37
    ```
    - Per-item amounts are each person's actual share (÷N for shared items)
    - Fees/tip shown as dollar amount + percentage of food subtotal
-   - Smart truncation: if > 280 chars, collapses items to `N items ($X.XX)`; last resort appends `…` at 277 chars
+   - Kept under Venmo's ~280-char note cap by degrading in steps that each preserve the arithmetic: itemized → items collapsed to `N items ($X.XX)` → restaurant prefix dropped → hard truncation with `...`
 
-2. Fires `Intent.ACTION_VIEW` with:
+2. Fires `Intent.ACTION_VIEW` with the URL from `buildVenmoChargeUrl`:
    ```
    https://venmo.com/?txn=charge&audience=private
-     &recipients=<venmoUsername>
+     &recipients=<percent-encoded username>
      &amount=<total>
-     &note=<URL-encoded note>
+     &note=<percent-encoded note>
    ```
+   Both query params are percent-encoded with `%20` for spaces (never `+`, which some decoders keep literal). The username is re-normalized at link-build time so rosters saved before normalization existed still produce working links.
 
 3. Marks the person as requested in `session.venmoRequestedPersonIds` (shown as a checkmark in the UI).
 
