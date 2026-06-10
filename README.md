@@ -22,13 +22,11 @@ An Android app for splitting restaurant bills with friends. Scan a receipt, assi
 
 ### API key
 
-Create or edit `local.properties` in the project root and add:
-
-```
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
-This file is gitignored and never committed.
+Receipt scanning uses Claude. The key is entered **in the app at runtime**, not
+baked into the build: open **Settings** (gear icon on the home screen) and paste
+your [Anthropic API key](https://console.anthropic.com/settings/keys). It's stored
+only on-device (DataStore) and is never bundled into the APK. Without a key you can
+still add items manually.
 
 ### Build
 

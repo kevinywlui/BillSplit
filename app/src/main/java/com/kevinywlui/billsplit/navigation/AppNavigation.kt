@@ -11,6 +11,7 @@ import com.kevinywlui.billsplit.ui.screens.CameraScreen
 import com.kevinywlui.billsplit.ui.screens.HistoryScreen
 import com.kevinywlui.billsplit.ui.screens.HomeScreen
 import com.kevinywlui.billsplit.ui.screens.ItemAssignmentScreen
+import com.kevinywlui.billsplit.ui.screens.SettingsScreen
 import com.kevinywlui.billsplit.ui.screens.SummaryScreen
 import com.kevinywlui.billsplit.viewmodel.BillViewModel
 
@@ -20,6 +21,7 @@ sealed class Screen(val route: String) {
     object ItemAssignment : Screen("item_assignment")
     object Summary : Screen("summary")
     object History : Screen("history")
+    object Settings : Screen("settings")
 }
 
 @Composable
@@ -39,7 +41,8 @@ fun AppNavigation() {
             HomeScreen(
                 viewModel = viewModel,
                 onStartCamera = { navController.navigate(Screen.Camera.route) },
-                onViewHistory = { navController.navigate(Screen.History.route) }
+                onViewHistory = { navController.navigate(Screen.History.route) },
+                onOpenSettings = { navController.navigate(Screen.Settings.route) }
             )
         }
         composable(Screen.Camera.route) {
@@ -75,6 +78,12 @@ fun AppNavigation() {
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() },
                 onOpenSummary = { navController.navigate(Screen.Summary.route) }
+            )
+        }
+        composable(Screen.Settings.route) {
+            SettingsScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() }
             )
         }
     }

@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.kevinywlui.billsplit.data.BillHistoryRepository
 import com.kevinywlui.billsplit.data.PeopleRepository
+import com.kevinywlui.billsplit.data.SettingsRepository
 import com.kevinywlui.billsplit.model.SavedBill
 import com.kevinywlui.billsplit.model.BillSession
 import com.kevinywlui.billsplit.model.LineItem
@@ -25,7 +26,8 @@ import java.util.UUID
 class BillViewModel @JvmOverloads constructor(
     application: Application,
     private val repo: PeopleRepository = PeopleRepository(application),
-    private val historyRepo: BillHistoryRepository = BillHistoryRepository(application)
+    private val historyRepo: BillHistoryRepository = BillHistoryRepository(application),
+    private val settingsRepo: SettingsRepository = SettingsRepository(application)
 ) : AndroidViewModel(application) {
 
     private val _billHistory = MutableStateFlow<List<SavedBill>>(emptyList())
@@ -65,6 +67,9 @@ class BillViewModel @JvmOverloads constructor(
         }
     }
 
+    private val _apiKey = MutableStateFlow("")
+    val apiKey: StateFlow<String> = _apiKey.asStateFlow()
+
     init {
         viewModelScope.launch {
             repo.people.collect { _savedPeople.value = it }
@@ -72,6 +77,13 @@ class BillViewModel @JvmOverloads constructor(
         viewModelScope.launch {
             historyRepo.bills.collect { _billHistory.value = it }
         }
+        viewModelScope.launch {
+            settingsRepo.apiKey.collect { _apiKey.value = it }
+        }
+    }
+
+    fun setApiKey(key: String) {
+        viewModelScope.launch { settingsRepo.setApiKey(key) }
     }
 
     private val _saveMessage = MutableStateFlow<String?>(null)
@@ -216,8 +228,13 @@ class BillViewModel @JvmOverloads constructor(
             _isProcessing.value = true
             _errorMessage.value = null
             try {
+                val key = settingsRepo.getApiKey()
+                if (key.isBlank()) {
+                    _errorMessage.value = "Add your Anthropic API key in Settings to scan receipts. You can still add items manually."
+                    return@launch
+                }
                 val imagePath = saveBitmapToFile(bitmap)
-                val parsed = ClaudeReceiptParser.parse(bitmap)
+                val parsed = ClaudeReceiptParser.parse(bitmap, key)
                 _session.update { it.copy(
                     items = parsed.items,
                     tax = parsed.tax,

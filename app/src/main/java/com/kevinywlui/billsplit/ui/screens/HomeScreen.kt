@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,12 +29,15 @@ import com.kevinywlui.billsplit.viewmodel.BillViewModel
 fun HomeScreen(
     viewModel: BillViewModel,
     onStartCamera: () -> Unit,
-    onViewHistory: () -> Unit
+    onViewHistory: () -> Unit,
+    onOpenSettings: () -> Unit
 ) {
     val session by viewModel.session.collectAsState()
     val savedPeople by viewModel.savedPeople.collectAsState()
+    val apiKey by viewModel.apiKey.collectAsState()
     var showAddSheet by remember { mutableStateOf(false) }
     var editingPerson by remember { mutableStateOf<Person?>(null) }
+    var showKeyPrompt by remember { mutableStateOf(false) }
 
     val billPersonIds = session.people.map { it.id }.toSet()
 
@@ -48,6 +52,9 @@ fun HomeScreen(
                 actions = {
                     IconButton(onClick = onViewHistory) {
                         Icon(Icons.Default.History, contentDescription = "History")
+                    }
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
                 }
             )
@@ -105,7 +112,7 @@ fun HomeScreen(
             }
 
             Button(
-                onClick = onStartCamera,
+                onClick = { if (apiKey.isBlank()) showKeyPrompt = true else onStartCamera() },
                 enabled = billCount >= 2,
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -114,6 +121,29 @@ fun HomeScreen(
 
             Spacer(Modifier.height(4.dp))
         }
+    }
+
+    if (showKeyPrompt) {
+        AlertDialog(
+            onDismissRequest = { showKeyPrompt = false },
+            title = { Text("API key needed") },
+            text = {
+                Text(
+                    "Receipt scanning needs an Anthropic API key. Add one in Settings, " +
+                        "or scan anyway and enter the items manually."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showKeyPrompt = false; onOpenSettings() }) {
+                    Text("Open Settings")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showKeyPrompt = false; onStartCamera() }) {
+                    Text("Scan anyway")
+                }
+            }
+        )
     }
 
     if (showAddSheet) {

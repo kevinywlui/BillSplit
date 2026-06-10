@@ -42,9 +42,6 @@ jobs:
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
-          # Optional: bakes your Anthropic key into the public APK so receipt
-          # scanning works out of the box. Leave unset to ship without a key.
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: >-
           ./gradlew assembleRelease --no-daemon
           -PversionName=${{ steps.ver.outputs.name }}

@@ -1,10 +1,3 @@
-import java.util.Properties
-
-val localProperties = Properties().apply {
-    val f = rootProject.file("local.properties")
-    if (f.exists()) load(f.inputStream())
-}
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -24,13 +17,6 @@ android {
         versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 1
         versionName = (project.findProperty("versionName") as String?) ?: "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        // Resolve the API key from: (1) ANTHROPIC_API_KEY env var (CI secret),
-        // (2) local.properties (local dev), else empty.
-        val anthropicKey = System.getenv("ANTHROPIC_API_KEY")
-            ?: localProperties["ANTHROPIC_API_KEY"] as String?
-            ?: ""
-        buildConfigField("String", "ANTHROPIC_API_KEY", "\"$anthropicKey\"")
     }
 
     signingConfigs {

@@ -2,7 +2,6 @@ package com.kevinywlui.billsplit.ocr
 
 import android.graphics.Bitmap
 import android.util.Base64
-import com.kevinywlui.billsplit.BuildConfig
 import com.kevinywlui.billsplit.model.LineItem
 import com.kevinywlui.billsplit.model.ParsedReceipt
 import kotlinx.coroutines.Dispatchers
@@ -27,7 +26,7 @@ object ClaudeReceiptParser {
         .build()
     private val JSON_MEDIA = "application/json".toMediaType()
 
-    suspend fun parse(bitmap: Bitmap): ParsedReceipt = withContext(Dispatchers.IO) {
+    suspend fun parse(bitmap: Bitmap, apiKey: String): ParsedReceipt = withContext(Dispatchers.IO) {
         val imageData = run {
             val maxDim = 1568
             val scale = minOf(maxDim.toFloat() / bitmap.width, maxDim.toFloat() / bitmap.height, 1f)
@@ -92,7 +91,7 @@ object ClaudeReceiptParser {
 
         val request = Request.Builder()
             .url("https://api.anthropic.com/v1/messages")
-            .addHeader("x-api-key", BuildConfig.ANTHROPIC_API_KEY)
+            .addHeader("x-api-key", apiKey)
             .addHeader("anthropic-version", "2023-06-01")
             .post(body)
             .build()
