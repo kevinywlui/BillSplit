@@ -28,6 +28,18 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
 
+/**
+ * Single source of truth for the active [BillSession] and the bridge to all repositories.
+ * One instance is scoped to the navigation graph and shared by every screen.
+ *
+ * The repository-backed flows ([savedPeople], [billHistory], [apiKey], [receiptModelId]) are
+ * collected in [init] and re-published as [StateFlow]s. Session edits replace the whole
+ * [BillSession] via `update { copy(...) }`. Receipt scans run in a cancelable [receiptJob]
+ * so a newer scan supersedes an in-flight one without leaving the spinner stuck. Receipt
+ * images are persisted under `filesDir/receipts/`; orphaned files are pruned on replace/reset/delete.
+ *
+ * Constructor dependencies are injectable (defaulted) so tests can supply fakes.
+ */
 class BillViewModel @JvmOverloads constructor(
     application: Application,
     private val repo: PeopleRepository = PeopleRepository(application),

@@ -1,5 +1,14 @@
 package com.kevinywlui.billsplit.model
 
+/**
+ * Immutable snapshot of the bill currently being worked on. The ViewModel holds it in a
+ * [kotlinx.coroutines.flow.StateFlow] and replaces it wholesale on every edit, so all
+ * derived numbers are expressed as computed properties here rather than stored state.
+ *
+ * Money flows in three layers: [subtotal] (priced items) → [effectiveReceiptTotal]
+ * (user override, else the OCR/receipt total, else the computed [grandTotal]) →
+ * [effectiveTotal] (plus [adjustments], i.e. tip). Per-person splits live in [finalShares].
+ */
 data class BillSession(
     val people: List<Person> = emptyList(),
     val items: List<LineItem> = emptyList(),

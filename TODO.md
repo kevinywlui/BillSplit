@@ -1,10 +1,12 @@
 # TODO
 
-## 16 KB Page Alignment (Android 15)
+_Nothing actively blocking. Add real, verified follow-ups here as they come up._
 
-ML Kit (`libmlkit_google_ocr_pipeline.so`) and `libandroidx.graphics.path.so` are not 16 KB
-page-aligned, causing a warning on Pixel 9 (Android 15). `useLegacyPackaging = true` in
-`app/build.gradle.kts` did not resolve it.
+## Resolved / no longer applicable
 
-Proper fix requires upstream library updates. Revisit when newer versions of
-`com.google.mlkit:text-recognition` and `androidx.graphics:graphics-path` are available.
+- **16 KB page alignment (Android 15).** Previously tracked here because ML Kit's
+  `libmlkit_google_ocr_pipeline.so` was not 16 KB page-aligned. Receipt parsing now goes
+  straight to Claude's vision API and ML Kit is no longer a dependency (it is not declared in
+  `app/build.gradle.kts` and is not imported anywhere), so that native library is no longer
+  packaged. If a 16 KB-alignment warning resurfaces from another `.so`, identify the owning
+  library and bump it.

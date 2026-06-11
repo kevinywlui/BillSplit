@@ -9,16 +9,21 @@ An Android app for splitting restaurant bills with friends. Scan a receipt, assi
 - **Proportional fees** — tax, tip, and other fees are split proportionally to each person's food share using the largest-remainder method so amounts always add up exactly
 - **Persistent people** — saved people with color avatars carry over between sessions; toggle who's on a given bill without re-entering names
 - **Bill history** — save splits and review past bills
-- **Venmo deep links** — one tap to request payment from each person
+- **Venmo deep links** — one tap to request payment from each person (the prefilled
+  amount/note is honored by Venmo's desktop web; the mobile app and mobile site ignore
+  them, so the in-app button notes this)
 - **Discrepancy detection** — warns if the computed total differs from the receipt total by more than $0.02
 
 ## Setup
 
 ### Prerequisites
 
-- Android Studio
-- Android SDK (API 26+)
-- An [Anthropic API key](https://console.anthropic.com/)
+- Android Studio (or the command-line Android SDK + Gradle wrapper)
+- Android SDK platform 34 and build-tools (`minSdk` 26, `compile`/`targetSdk` 34)
+- JDK 21 (used to run Gradle; the project compiles to JVM 11 bytecode per `build.gradle.kts`).
+  The JDK-21-runner / JVM-11-target split is deliberate — see [CLAUDE.md](CLAUDE.md#build--test).
+- An [Anthropic API key](https://console.anthropic.com/settings/keys) — optional; only receipt
+  scanning needs it, items can also be added manually
 
 ### API key
 
@@ -41,7 +46,8 @@ the normal error, so you can switch back.
 ### Build
 
 ```bash
-./gradlew assembleDebug
+./gradlew assembleDebug          # debug APK
+./gradlew testDebugUnitTest      # run the unit tests
 ```
 
 Install on a connected device:
@@ -49,6 +55,9 @@ Install on a connected device:
 ```bash
 adb install app/build/outputs/apk/debug/app-debug.apk
 ```
+
+For signed release builds see [Releases](#releases). Contributors should read
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Data compatibility
 
@@ -70,12 +79,29 @@ persisted model (`SavedBill`, `Person`, `LineItem`, …):
 
 See *Persistence* in [ARCHITECTURE.md](ARCHITECTURE.md) for details.
 
-## Tech stack
+## Releases
+
+Releases are cut by pushing a `v*` Git tag (e.g. `git tag v1.2.1 && git push origin v1.2.1`).
+The [`release.yml`](.github/workflows/release.yml) workflow then builds a **signed** release
+APK and publishes it as a GitHub Release with auto-generated notes.
+
+- `versionName` comes from the tag (the leading `v` is stripped); `versionCode` is the
+  workflow run number. Locally these default to `1.0` / `1` unless you pass
+  `-PversionName` / `-PversionCode`.
+- Signing keys come from repository secrets, decoded at build time. Local `assembleRelease`
+  builds stay **unsigned** because no keystore env vars are present.
+- Every push to `main` and every pull request runs [`android.yml`](.github/workflows/android.yml):
+  unit tests (`testDebugUnitTest`) then `assembleDebug`, uploading the debug APK as an artifact.
+
+## Tech Stack
 
 - Kotlin + Jetpack Compose (Material 3)
-- CameraX for capture
-- ML Kit Text Recognition for OCR
-- Claude via Anthropic API for contextual receipt parsing — model selectable in
-  Settings (`claude-sonnet-4-6` by default)
-- DataStore Preferences for persistent storage
+- CameraX for receipt capture
+- Claude via the Anthropic Messages API for vision-based receipt parsing — the image is
+  sent directly to Claude (no on-device OCR step); model selectable in Settings
+  (`claude-sonnet-4-6` by default)
+- Jetpack DataStore (Preferences) for persistent storage
+- OkHttp for the Anthropic API call; JSON is assembled/parsed with `org.json` (provided to
+  the app at runtime by the Android SDK's `android.jar` — declared in `build.gradle.kts` only
+  in `testImplementation` scope, since the local JVM tests have no `android.jar`)
 - Navigation Compose with slide transitions
