@@ -21,9 +21,7 @@ enum class ReceiptModel(val id: String, val label: String, val blurb: String) {
     OPUS_4_8("claude-opus-4-8", "Claude Opus 4.8", "Most capable · ~6¢ per scan");
 
     companion object {
+        /** Used when no model has been chosen yet (blank stored id). */
         val DEFAULT = SONNET_4_6
-
-        /** Map a stored API id back to a model, falling back to [DEFAULT] for unknown/blank ids. */
-        fun fromId(id: String?): ReceiptModel = entries.find { it.id == id } ?: DEFAULT
     }
 }

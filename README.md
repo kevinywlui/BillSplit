@@ -31,9 +31,12 @@ still add items manually.
 ### Receipt model
 
 The same Settings screen has a **Receipt model** picker. Claude Sonnet 4.6 is the
-default — it parses receipts well at roughly ~1¢ per scan. A more capable frontier
-model can be selected for messy or faint receipts at higher cost and slightly more
-latency. The choice is stored on-device and applied to every subsequent scan.
+default — it parses receipts well at roughly ~1¢ per scan. Haiku is cheaper/faster
+and Opus is more capable, at higher cost and slightly more latency. Choosing
+**Custom…** lets you enter any Anthropic model id (e.g. a dated snapshot or a newly
+released model) without waiting for an app update. The choice is stored on-device and
+applied to every subsequent scan; an unrecognized id simply fails the next scan with
+the normal error, so you can switch back.
 
 ### Build
 

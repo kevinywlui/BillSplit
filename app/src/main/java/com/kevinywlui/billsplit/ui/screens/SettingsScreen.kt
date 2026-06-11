@@ -31,7 +31,7 @@ fun SettingsScreen(
     val savedKey by viewModel.apiKey.collectAsState()
     var keyInput by remember(savedKey) { mutableStateOf(savedKey) }
     var revealed by remember { mutableStateOf(false) }
-    val selectedModel by viewModel.receiptModel.collectAsState()
+    val savedModelId by viewModel.receiptModelId.collectAsState()
     val context = LocalContext.current
 
     Scaffold(
@@ -128,13 +128,14 @@ fun SettingsScreen(
             )
             Text(
                 "Which Claude model reads the receipt. A more capable model can help " +
-                    "with messy or faint receipts, but costs more and is a little slower.",
+                    "with messy or faint receipts, but costs more and is a little slower. " +
+                    "Pick a preset, or choose Custom to enter any Anthropic model id.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             ModelPicker(
-                selected = selectedModel,
-                onSelect = { viewModel.setReceiptModel(it) }
+                savedId = savedModelId,
+                onSelectId = { viewModel.setReceiptModelId(it) }
             )
         }
     }
@@ -143,47 +144,90 @@ fun SettingsScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ModelPicker(
-    selected: ReceiptModel,
-    onSelect: (ReceiptModel) -> Unit
+    savedId: String,
+    onSelectId: (String) -> Unit
 ) {
+    // The saved id is either one of the presets, or a custom id the user typed.
+    val preset = remember(savedId) { ReceiptModel.entries.find { it.id == savedId } }
     var expanded by remember { mutableStateOf(false) }
+    var customMode by remember(savedId) { mutableStateOf(preset == null) }
+    var customText by remember(savedId) { mutableStateOf(if (preset == null) savedId else "") }
 
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it }
-    ) {
-        OutlinedTextField(
-            value = selected.label,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Model") },
-            supportingText = { Text(selected.blurb) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier
-                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                .fillMaxWidth()
-        )
-        ExposedDropdownMenu(
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ExposedDropdownMenuBox(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
+            onExpandedChange = { expanded = it }
         ) {
-            ReceiptModel.entries.forEach { model ->
+            OutlinedTextField(
+                value = if (customMode) "Custom model id" else (preset?.label ?: "Custom model id"),
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Model") },
+                supportingText = {
+                    Text(if (customMode) "Enter any Anthropic model id below" else (preset?.blurb ?: ""))
+                },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                modifier = Modifier
+                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                    .fillMaxWidth()
+            )
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                ReceiptModel.entries.forEach { model ->
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Text(model.label)
+                                Text(
+                                    model.blurb,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        },
+                        onClick = {
+                            customMode = false
+                            onSelectId(model.id)
+                            expanded = false
+                        }
+                    )
+                }
                 DropdownMenuItem(
                     text = {
                         Column {
-                            Text(model.label)
+                            Text("Custom…")
                             Text(
-                                model.blurb,
+                                "Type any Anthropic model id",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     },
                     onClick = {
-                        onSelect(model)
+                        customMode = true
                         expanded = false
                     }
                 )
+            }
+        }
+
+        if (customMode) {
+            OutlinedTextField(
+                value = customText,
+                onValueChange = { customText = it },
+                label = { Text("Model id") },
+                placeholder = { Text("claude-…") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Button(
+                onClick = { onSelectId(customText) },
+                enabled = customText.trim().isNotEmpty() && customText.trim() != savedId,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Use this model")
             }
         }
     }

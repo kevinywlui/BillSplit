@@ -160,7 +160,7 @@ BillViewModel updates BillSession
 
 OkHttp timeouts: connect 30s, write 60s, read 60s. The call is wrapped in `suspendCancellableCoroutine` so cancelling the coroutine also cancels the in-flight HTTP request.
 
-**Model selection:** `ReceiptModel` (in `ocr/`) is the registry of selectable vision models — each carries its Anthropic API `model` id, a display label, and a cost blurb. The chosen id is persisted by `SettingsRepository` (`receipt_model_id` key) and read fresh on each scan, then passed into `ClaudeReceiptParser.parse(bitmap, key, model)`. An unknown/blank stored id falls back to `ReceiptModel.DEFAULT` (Sonnet 4.6), so removing a model from the registry never breaks existing installs.
+**Model selection:** `ReceiptModel` (in `ocr/`) is the registry of preset vision models — each carries its Anthropic API `model` id, a display label, and a cost blurb. Settings persists the chosen id as a raw string via `SettingsRepository` (`receipt_model_id` key); it may be a preset id or a **custom id** the user typed (Settings → Receipt model → Custom…). The id is read fresh on each scan and passed straight into `ClaudeReceiptParser.parse(bitmap, key, model)` — the parser never consults the enum, so any valid Anthropic model id works without a code change. The Settings picker maps a saved id back to a preset by exact match (`ReceiptModel.entries.find`), showing "Custom" when none matches. A blank stored id falls back to `ReceiptModel.DEFAULT` (Sonnet 4.6); an unknown id simply fails the next scan with the usual error.
 
 ---
 

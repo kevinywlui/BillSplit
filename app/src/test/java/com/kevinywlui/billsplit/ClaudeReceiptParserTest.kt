@@ -11,13 +11,11 @@ import org.junit.Test
 class ClaudeReceiptParserTest {
 
     @Test
-    fun `ReceiptModel fromId round-trips known ids and falls back to default`() {
-        ReceiptModel.entries.forEach { model ->
-            assertEquals(model, ReceiptModel.fromId(model.id))
-        }
-        assertEquals(ReceiptModel.DEFAULT, ReceiptModel.fromId(null))
-        assertEquals(ReceiptModel.DEFAULT, ReceiptModel.fromId(""))
-        assertEquals(ReceiptModel.DEFAULT, ReceiptModel.fromId("claude-nonexistent-9"))
+    fun `ReceiptModel ids are unique, non-blank, and include the default`() {
+        val ids = ReceiptModel.entries.map { it.id }
+        assertEquals("ids must be unique", ids.size, ids.toSet().size)
+        assertTrue("ids must be non-blank", ids.all { it.isNotBlank() })
+        assertTrue("DEFAULT must be one of the presets", ReceiptModel.DEFAULT in ReceiptModel.entries)
     }
 
     private fun claudeResponse(json: String) = json  // parseReceiptJson receives the text block directly

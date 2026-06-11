@@ -75,8 +75,9 @@ class BillViewModel @JvmOverloads constructor(
     private val _apiKey = MutableStateFlow("")
     val apiKey: StateFlow<String> = _apiKey.asStateFlow()
 
-    private val _receiptModel = MutableStateFlow(ReceiptModel.DEFAULT)
-    val receiptModel: StateFlow<ReceiptModel> = _receiptModel.asStateFlow()
+    private val _receiptModelId = MutableStateFlow(ReceiptModel.DEFAULT.id)
+    /** Raw Anthropic model id used for parsing — a preset id or a user-entered custom one. */
+    val receiptModelId: StateFlow<String> = _receiptModelId.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -89,7 +90,7 @@ class BillViewModel @JvmOverloads constructor(
             settingsRepo.apiKey.collect { _apiKey.value = it }
         }
         viewModelScope.launch {
-            settingsRepo.receiptModelId.collect { _receiptModel.value = ReceiptModel.fromId(it) }
+            settingsRepo.receiptModelId.collect { _receiptModelId.value = it }
         }
     }
 
@@ -97,8 +98,10 @@ class BillViewModel @JvmOverloads constructor(
         viewModelScope.launch { settingsRepo.setApiKey(key) }
     }
 
-    fun setReceiptModel(model: ReceiptModel) {
-        viewModelScope.launch { settingsRepo.setReceiptModelId(model.id) }
+    fun setReceiptModelId(id: String) {
+        val trimmed = id.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch { settingsRepo.setReceiptModelId(trimmed) }
     }
 
     private val _saveMessage = MutableStateFlow<String?>(null)
