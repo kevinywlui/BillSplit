@@ -1,5 +1,6 @@
 package com.kevinywlui.billsplit
 
+import com.kevinywlui.billsplit.ocr.ReceiptModel
 import com.kevinywlui.billsplit.ocr.ReceiptParseError
 import com.kevinywlui.billsplit.ocr.classifyParseError
 import com.kevinywlui.billsplit.ocr.parseReceiptJson
@@ -8,6 +9,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ClaudeReceiptParserTest {
+
+    @Test
+    fun `ReceiptModel fromId round-trips known ids and falls back to default`() {
+        ReceiptModel.entries.forEach { model ->
+            assertEquals(model, ReceiptModel.fromId(model.id))
+        }
+        assertEquals(ReceiptModel.DEFAULT, ReceiptModel.fromId(null))
+        assertEquals(ReceiptModel.DEFAULT, ReceiptModel.fromId(""))
+        assertEquals(ReceiptModel.DEFAULT, ReceiptModel.fromId("claude-nonexistent-9"))
+    }
 
     private fun claudeResponse(json: String) = json  // parseReceiptJson receives the text block directly
 

@@ -27,7 +27,11 @@ object ClaudeReceiptParser {
         .build()
     private val JSON_MEDIA = "application/json".toMediaType()
 
-    suspend fun parse(bitmap: Bitmap, apiKey: String): ParsedReceipt = withContext(Dispatchers.IO) {
+    suspend fun parse(
+        bitmap: Bitmap,
+        apiKey: String,
+        model: String = ReceiptModel.DEFAULT.id
+    ): ParsedReceipt = withContext(Dispatchers.IO) {
         val imageData = run {
             val maxDim = 1568
             val scale = minOf(maxDim.toFloat() / bitmap.width, maxDim.toFloat() / bitmap.height, 1f)
@@ -81,7 +85,7 @@ object ClaudeReceiptParser {
         }
 
         val body = JSONObject().apply {
-            put("model", "claude-sonnet-4-6")
+            put("model", model)
             put("max_tokens", 1024)
             put("temperature", 0)
             put("messages", JSONArray().put(JSONObject().apply {

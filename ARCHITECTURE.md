@@ -140,7 +140,7 @@ ClaudeReceiptParser.parse(bitmap)
   2. JPEG-compress at 85% quality
   3. Base64-encode
   4. POST to https://api.anthropic.com/v1/messages
-       model: claude-sonnet-4-6
+       model: user-selected (Settings → Receipt model; default claude-sonnet-4-6)
        temperature: 0
        content: [image block, text prompt]
   5. Parse JSON from response
@@ -159,6 +159,8 @@ BillViewModel updates BillSession
 - `restaurantName` from the top of the receipt
 
 OkHttp timeouts: connect 30s, write 60s, read 60s. The call is wrapped in `suspendCancellableCoroutine` so cancelling the coroutine also cancels the in-flight HTTP request.
+
+**Model selection:** `ReceiptModel` (in `ocr/`) is the registry of selectable vision models — each carries its Anthropic API `model` id, a display label, and a cost blurb. The chosen id is persisted by `SettingsRepository` (`receipt_model_id` key) and read fresh on each scan, then passed into `ClaudeReceiptParser.parse(bitmap, key, model)`. An unknown/blank stored id falls back to `ReceiptModel.DEFAULT` (Sonnet 4.6), so removing a model from the registry never breaks existing installs.
 
 ---
 
@@ -201,6 +203,29 @@ Both repositories use **Jetpack DataStore** (Preferences), storing JSON strings 
 - Stores a JSON array of `SavedBill` snapshots, newest first
 - `saveBill()` prepends; `deleteBill()` filters by id
 - Deserialization uses per-entry `mapNotNull` so a corrupt entry is skipped without wiping other bills
+
+### Data compatibility policy
+
+**Persisted data must remain readable from one release to the next — updating the
+app must never wipe a user's bill history or roster.** This is a hard requirement,
+not a best-effort goal.
+
+- **Serialization is forgiving by design.** `Json` is configured with
+  `ignoreUnknownKeys = true` and `encodeDefaults = true`, and every persisted field
+  has a default. So *additive* changes (new field) and *removable* changes (drop a
+  field old data still carries) are safe — old payloads keep deserializing.
+- **Incompatible changes need a migration.** Renaming a field, changing its meaning,
+  or changing units is **not** safe. For those: bump `HISTORY_SCHEMA_VERSION`, and
+  add a `when (version)` branch in `deserialize()` that upgrades older payloads to the
+  current shape. Bill history is wrapped in a versioned `BillHistoryEnvelope`
+  (`{"version":N,"bills":[…]}`) for exactly this reason; the legacy bare-array form
+  (pre-versioning) is still accepted on read.
+- **Degrade, never destroy.** If an individual entry can't be read, skip it
+  (`mapNotNull`) rather than discarding the whole store.
+
+When you touch `SavedBill`, `Person`, `LineItem`, or any other persisted model, decide
+which bucket the change falls into and handle it accordingly. `BillHistorySerializationTest`
+guards the round-trip and the legacy-format path — extend it when you add a migration.
 
 ---
 
@@ -283,4 +308,4 @@ Key mutations:
 | Camera | CameraX |
 | Networking | OkHttp (manual JSON via `org.json`) |
 | Persistence | Jetpack DataStore (Preferences) |
-| AI | Claude claude-sonnet-4-6 via Anthropic Messages API (vision) |
+| AI | Claude via Anthropic Messages API (vision); model selectable in Settings, default `claude-sonnet-4-6` |

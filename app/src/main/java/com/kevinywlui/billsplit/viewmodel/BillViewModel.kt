@@ -12,6 +12,7 @@ import com.kevinywlui.billsplit.model.BillSession
 import com.kevinywlui.billsplit.model.LineItem
 import com.kevinywlui.billsplit.model.Person
 import com.kevinywlui.billsplit.ocr.ClaudeReceiptParser
+import com.kevinywlui.billsplit.ocr.ReceiptModel
 import com.kevinywlui.billsplit.ocr.ReceiptParseError
 import com.kevinywlui.billsplit.ocr.ReceiptParseException
 import com.kevinywlui.billsplit.ocr.classifyParseError
@@ -74,6 +75,9 @@ class BillViewModel @JvmOverloads constructor(
     private val _apiKey = MutableStateFlow("")
     val apiKey: StateFlow<String> = _apiKey.asStateFlow()
 
+    private val _receiptModel = MutableStateFlow(ReceiptModel.DEFAULT)
+    val receiptModel: StateFlow<ReceiptModel> = _receiptModel.asStateFlow()
+
     init {
         viewModelScope.launch {
             repo.people.collect { _savedPeople.value = it }
@@ -84,10 +88,17 @@ class BillViewModel @JvmOverloads constructor(
         viewModelScope.launch {
             settingsRepo.apiKey.collect { _apiKey.value = it }
         }
+        viewModelScope.launch {
+            settingsRepo.receiptModelId.collect { _receiptModel.value = ReceiptModel.fromId(it) }
+        }
     }
 
     fun setApiKey(key: String) {
         viewModelScope.launch { settingsRepo.setApiKey(key) }
+    }
+
+    fun setReceiptModel(model: ReceiptModel) {
+        viewModelScope.launch { settingsRepo.setReceiptModelId(model.id) }
     }
 
     private val _saveMessage = MutableStateFlow<String?>(null)
@@ -247,7 +258,7 @@ class BillViewModel @JvmOverloads constructor(
                     return@launch
                 }
                 val imagePath = saveBitmapToFile(bitmap)
-                val parsed = ClaudeReceiptParser.parse(bitmap, key)
+                val parsed = ClaudeReceiptParser.parse(bitmap, key, settingsRepo.getReceiptModelId())
                 _session.update { it.copy(
                     items = parsed.items,
                     tax = parsed.tax,

@@ -4,7 +4,7 @@ An Android app for splitting restaurant bills with friends. Scan a receipt, assi
 
 ## Features
 
-- **Receipt scanning** — photograph a receipt and ML Kit OCR + Claude Sonnet extract the line items, tax, tip, and total automatically
+- **Receipt scanning** — photograph a receipt and Claude reads the line items, tax, tip, and total automatically. The model is selectable in **Settings** (Claude Sonnet 4.6 by default; a more capable model can be chosen for tricky receipts)
 - **Inline assignment** — tap person avatars directly on each item to assign it; no dialogs to open
 - **Proportional fees** — tax, tip, and other fees are split proportionally to each person's food share using the largest-remainder method so amounts always add up exactly
 - **Persistent people** — saved people with color avatars carry over between sessions; toggle who's on a given bill without re-entering names
@@ -28,6 +28,13 @@ your [Anthropic API key](https://console.anthropic.com/settings/keys). It's stor
 only on-device (DataStore) and is never bundled into the APK. Without a key you can
 still add items manually.
 
+### Receipt model
+
+The same Settings screen has a **Receipt model** picker. Claude Sonnet 4.6 is the
+default — it parses receipts well at roughly ~1¢ per scan. A more capable frontier
+model can be selected for messy or faint receipts at higher cost and slightly more
+latency. The choice is stored on-device and applied to every subsequent scan.
+
 ### Build
 
 ```bash
@@ -40,11 +47,32 @@ Install on a connected device:
 adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## Data compatibility
+
+> **Policy: persisted data must stay readable from one release to the next.**
+
+The app stores bill history and the saved-people roster on-device (DataStore). A
+user who updates the app must never lose that data. Concretely, when changing any
+persisted model (`SavedBill`, `Person`, `LineItem`, …):
+
+- **Additive/removable fields are safe** — `kotlinx.serialization` is configured
+  with `ignoreUnknownKeys = true` and field defaults, so old data still deserializes.
+- **Incompatible changes** (renaming a field, changing its meaning or units) require
+  a migration: bump `HISTORY_SCHEMA_VERSION` in `BillHistoryRepository` and add a
+  `when (version)` branch in `deserialize()` that upgrades old payloads. The version
+  is stamped into every write precisely so old data is identifiable.
+- **Never ship a change that drops or corrupts existing bills.** If you can't migrate
+  cleanly, fall back to skipping the bad entry (as `deserialize` already does), not
+  wiping history.
+
+See *Persistence* in [ARCHITECTURE.md](ARCHITECTURE.md) for details.
+
 ## Tech stack
 
 - Kotlin + Jetpack Compose (Material 3)
 - CameraX for capture
 - ML Kit Text Recognition for OCR
-- Claude Sonnet (`claude-sonnet-4-6`) via Anthropic API for contextual receipt parsing
+- Claude via Anthropic API for contextual receipt parsing — model selectable in
+  Settings (`claude-sonnet-4-6` by default)
 - DataStore Preferences for persistent storage
 - Navigation Compose with slide transitions

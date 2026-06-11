@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.kevinywlui.billsplit.ocr.ReceiptModel
 import com.kevinywlui.billsplit.viewmodel.BillViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -30,6 +31,7 @@ fun SettingsScreen(
     val savedKey by viewModel.apiKey.collectAsState()
     var keyInput by remember(savedKey) { mutableStateOf(savedKey) }
     var revealed by remember { mutableStateOf(false) }
+    val selectedModel by viewModel.receiptModel.collectAsState()
     val context = LocalContext.current
 
     Scaffold(
@@ -116,6 +118,72 @@ fun SettingsScreen(
                 }
             ) {
                 Text("Get a key at console.anthropic.com")
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            Text(
+                "Receipt model",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                "Which Claude model reads the receipt. A more capable model can help " +
+                    "with messy or faint receipts, but costs more and is a little slower.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            ModelPicker(
+                selected = selectedModel,
+                onSelect = { viewModel.setReceiptModel(it) }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ModelPicker(
+    selected: ReceiptModel,
+    onSelect: (ReceiptModel) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it }
+    ) {
+        OutlinedTextField(
+            value = selected.label,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Model") },
+            supportingText = { Text(selected.blurb) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier
+                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                .fillMaxWidth()
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            ReceiptModel.entries.forEach { model ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(model.label)
+                            Text(
+                                model.blurb,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    onClick = {
+                        onSelect(model)
+                        expanded = false
+                    }
+                )
             }
         }
     }
